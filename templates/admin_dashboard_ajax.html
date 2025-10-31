@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Live Orders</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        /* Style for clickable rows */
+        #orders-table tbody tr:hover {
+            cursor: pointer;
+            background-color: #f8f9fa; 
+        }
+        /* Prevent button clicks from interfering with row clicks */
+        #orders-table tbody tr td:last-child {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Admin Panel</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">Live Orders</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_menu' %}active{% endif %}" href="{{ url_for('admin_menu') }}">Menu Management</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_completed_orders' %}active{% endif %}" href="{{ url_for('admin_completed_orders') }}">Sales History</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Live Orders Queue 👨‍🍳</h2>
+            <button id="reset-button" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash"></i> End-of-Day Reset
+            </button>
+        </div>
+        
+        <div id="flash-messages"></div>
+        
+        <table class="table table-hover" id="orders-table">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Time</th>
+                    <th>Customer</th>
+                    <th>Total</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr id="order-row-{{ order.order_id }}">
+                    <td>#{{ order.order_id }}</td>
+                    <td data-completion-time="{{ order.estimated_completion_time.isoformat() if order.estimated_completion_time else '' }}" 
+                        data-status="{{ order.order_status }}">
+                        Placed at: {{ order.order_date.strftime('%H:%M') }}
+                        <span id="order-countdown-{{ order.order_id }}" class="d-block small fw-bold"></span>
+                    </td>
+                    <td>{{ order.customer_name }}</td>
+                    <td>₹{{ "%.2f"|format(order.total_price) }}</td>
+                    <td id="status-{{ order.order_id }}">
+                        <span class="badge bg-{{ 'warning' if order.order_status == 'Pending' else 'success' if order.order_status == 'Completed' else 'danger' }}">
+                            {{ order.order_status }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if order.order_status == 'Pending' %}
+                            <button class="btn btn-sm btn-success mark-ready-btn" 
+                                    data-order-id="{{ order.order_id }}">
+                                Mark Ready
+                            </button>
+                        {% else %}
+                            <button class="btn btn-sm btn-secondary" disabled>Done</button>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Modal for displaying order details -->
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="orderDetailsModalLabel">Order Details #<span id="modal-order-id"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Customer: <strong id="modal-customer-name"></strong></p>
+                    <hr>
+                    <h6>Items to Prepare:</h6>
+                    <ul class="list-group" id="modal-items-list"></ul>
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total Order Value:</strong>
+                        <strong id="modal-total-price"></strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Data array passed from Flask/Jinja for row click functionality
+        const initialOrdersData = [
+            {% for order in orders %}
+            {
+                order_id: {{ order.order_id }},
+                customer_name: "{{ order.customer_name }}",
+                total_price: {{ "%.2f"|format(order.total_price) | float }},
+                order_date: "{{ order.order_date.isoformat() }}"
+            } {% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+
+        /**
+         * Utility function to display flash messages.
+         * @param {string} message - The message text.
+         * @param {string} type - The alert type (e.g., 'success', 'danger').
+         */
+        function showFlashMessage(message, type) {
+            const container = document.getElementById('flash-messages');
+            const alertHtml = `
+                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            `;
+            container.innerHTML = alertHtml;
+        }
+
+        /**
+         * Sets up click listeners on table rows to open the details modal.
+         * @param {Array} ordersData - The initial array of order objects.
+         */
+        function setupRowClickListeners(ordersData) {
+            document.querySelectorAll('#orders-table tbody tr').forEach(row => {
+                row.removeEventListener('click', handleRowClick); // Prevent duplicate listeners
+                row.addEventListener('click', handleRowClick);
+            });
+        
+            function handleRowClick(event) {
+                // Ignore clicks originating from the action buttons
+                if (event.target.closest('.mark-ready-btn') || event.target.closest('.btn-secondary[disabled]')) {
+                    return; 
+                }
+                
+                const orderId = parseInt(this.id.split('-')[2]);
+                const orderData = ordersData.find(o => o.order_id === orderId);
+                
+                if (orderData) {
+                    showOrderDetails(orderId, orderData);
+                }
+            }
+        }
+
+        /**
+         * Fetches and displays item details in the modal.
+         * @param {number} orderId - The ID of the order.
+         * @param {object} orderData - Summary data for the order.
+         */
+        async function showOrderDetails(orderId, orderData) {
+            const modal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+            const itemList = document.getElementById('modal-items-list');
+            
+            document.getElementById('modal-order-id').textContent = orderId;
+            document.getElementById('modal-customer-name').textContent = orderData.customer_name;
+            document.getElementById('modal-total-price').textContent = `₹${orderData.total_price.toFixed(2)}`;
+            itemList.innerHTML = '<li class="list-group-item text-center text-muted">Loading items...</li>';
+            
+            modal.show();
+
+            try {
+                const response = await fetch(`/admin/api/order_details/${orderId}`);
+                const data = await response.json();
+                itemList.innerHTML = '';
+
+                if (data.success && data.items.length > 0) {
+                    data.items.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                        li.innerHTML = `
+                            <span class="fs-5">${item.name}</span>
+                            <span class="badge bg-primary rounded-pill fs-6">${item.quantity}</span>
+                        `;
+                        itemList.appendChild(li);
+                    });
+                } else {
+                    itemList.innerHTML = '<li class="list-group-item text-muted">No details found.</li>';
+                }
+            } catch (error) {
+                console.error('Error fetching details:', error);
+                itemList.innerHTML = '<li class="list-group-item text-danger">Failed to connect to server.</li>';
+            }
+        }
+
+        /**
+         * Sets up click listeners for the 'Mark Ready' buttons.
+         */
+        function setupMarkReadyListeners() {
+            document.querySelectorAll('.mark-ready-btn').forEach(button => {
+                button.removeEventListener('click', handleMarkReadyClick); 
+                button.addEventListener('click', handleMarkReadyClick);
+            });
+        }
+
+        /**
+         * Handles the 'Mark Ready' button click event, calling the API to archive the order.
+         * @param {Event} event - The click event object.
+         */
+        async function handleMarkReadyClick(event) {
+            const buttonElement = event.currentTarget;
+            const orderId = buttonElement.getAttribute('data-order-id');
+            
+            buttonElement.disabled = true;
+            buttonElement.textContent = 'Clearing...';
+
+            try {
+                const response = await fetch('/admin/update_order_status_api', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order_id: orderId, status: 'Completed' }) // Status is handled backend
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    const orderRow = document.getElementById(`order-row-${orderId}`);
+                    if (orderRow) orderRow.remove();
+                    showFlashMessage(`Order #${orderId} cleared from queue.`, 'success');
+                } else {
+                    showFlashMessage(result.message, 'danger');
+                    buttonElement.disabled = false;
+                    buttonElement.textContent = 'Mark Ready';
+                }
+            } catch (error) {
+                console.error('AJAX Error:', error);
+                showFlashMessage('Network error occurred.', 'danger');
+                buttonElement.disabled = false;
+                buttonElement.textContent = 'Mark Ready';
+            }
+        }
+
+        /**
+         * Sets up the click listener for the 'End-of-Day Reset' button.
+         */
+        function setupResetButtonListener() {
+            document.getElementById('reset-button').addEventListener('click', function() {
+                if (!confirm("⚠️ WARNING: This will PERMANENTLY delete ALL order history and reset the order number count. Are you sure?")) {
+                    return;
+                }
+                fetch('/admin/reset_daily_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.querySelector('#orders-table tbody').innerHTML = ''; // Clear table visually
+                        showFlashMessage(data.message, 'success');
+                    } else {
+                        showFlashMessage(data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Reset Error:', error);
+                    showFlashMessage('Network error during reset.', 'danger');
+                });
+            });
+        }
+
+        /**
+         * Updates the countdown timers for pending orders every second.
+         */
+        function updateOrderTimers() {
+            const now = new Date();
+            document.querySelectorAll('[data-completion-time]').forEach(timeCell => {
+                const status = timeCell.getAttribute('data-status');
+                const completionTimeISO = timeCell.getAttribute('data-completion-time');
+                // Ensure the countdown span exists before trying to access its ID
+                const countdownSpanElement = timeCell.querySelector('[id^="order-countdown-"]');
+                if (!countdownSpanElement) return; // Skip if element not found
+
+                const orderId = countdownSpanElement.id.split('-')[2];
+                const countdownSpan = document.getElementById(`order-countdown-${orderId}`);
+                
+                if (!completionTimeISO || status !== 'Pending') {
+                    countdownSpan.textContent = status === 'Completed' ? '✅ READY' : (status === 'Cancelled' ? '❌ Cancelled' : '—');
+                    countdownSpan.classList.remove('text-danger', 'text-warning');
+                    if (status === 'Completed') countdownSpan.classList.add('text-success');
+                    return;
+                }
+                
+                const completionTime = new Date(completionTimeISO);
+                const timeLeftMs = completionTime - now;
+
+                if (timeLeftMs <= 0) {
+                    countdownSpan.textContent = '🔴 LATE: Should be ready now!';
+                    countdownSpan.classList.remove('text-warning');
+                    countdownSpan.classList.add('text-danger');
+                    return;
+                }
+
+                const minutes = Math.floor((timeLeftMs % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((timeLeftMs % (1000 * 60)) / 1000);
+                const formattedMinutes = String(minutes).padStart(2, '0');
+                const formattedSeconds = String(seconds).padStart(2, '0');
+                
+                countdownSpan.textContent = `Time Left: ${formattedMinutes}:${formattedSeconds}`;
+                countdownSpan.classList.add('text-warning');
+            });
+        }
+
+        /**
+         * Initializes all event listeners and timers when the DOM is ready.
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            setInterval(updateOrderTimers, 1000); 
+            updateOrderTimers(); // Initial call
+
+            setupMarkReadyListeners();
+            setupRowClickListeners(initialOrdersData);
+            setupResetButtonListener(); // Added listener for the reset button
+        });
+    </script>
+</body>
+</html>

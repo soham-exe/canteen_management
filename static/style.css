@@ -1,0 +1,9 @@
+/* A simple style to make the primary button a different color */
+.btn-primary {
+    background-color: #ff8c00; /* A nice orange color */
+    border-color: #ff8c00;
+}
+
+.card-title {
+    color: #333;
+}

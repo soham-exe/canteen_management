@@ -1,0 +1,213 @@
+{% extends "base_customer.html" %}
+
+{% block title %}Track Your Order{% endblock %}
+
+{% block content %}
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <!-- Order ID Input Form -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h2 class="text-center mb-4">Track Your Order</h2>
+                        <form id="trackOrderForm">
+                            <div class="input-group">
+                                <input type="number" id="order-id-input" class="form-control form-control-lg" placeholder="Enter Your Order ID #" required>
+                                <button type="submit" class="btn btn-primary">Track</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Order Details Display Card (hidden initially) -->
+                <div id="order-details-card" class="card shadow-sm d-none">
+                    <div class="card-header">
+                        <h4>Order Summary</h4>
+                    </div>
+                    <div class="card-body">
+                        <p>Customer: <strong id="customer-name-display"></strong></p>
+                        <hr>
+                        <h6>Items Ordered:</h6>
+                        <ul class="list-group list-group-flush mb-3" id="item-list-display">
+                            <!-- JS populates this list -->
+                        </ul>
+                        <hr>
+                        <div class="d-flex justify-content-between">
+                            <h5>Total Bill:</h5>
+                            <h5 id="total-bill-display"></h5>
+                        </div>
+                    </div>
+                    <div class="card-footer" id="status-display">
+                        <!-- JS populates status/timer here -->
+                    </div>
+                </div>
+
+                <!-- Error Message Area -->
+                <div id="error-display" class="mt-3"></div>
+            </div>
+        </div>
+        <div class="text-center mt-3">
+            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">Back to Menu</a>
+        </div>
+    </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let countdownInterval = null; // Holds the timer interval
+    let currentOrderData = null; // Stores fetched order data for receipt generation
+
+    /**
+     * When the page loads, check sessionStorage for a saved Order ID and auto-fetch if found.
+     */
+    document.addEventListener('DOMContentLoaded', () => {
+        const orderIdInput = document.getElementById('order-id-input');
+        const lastOrderId = sessionStorage.getItem('lastOrderId');
+        if (lastOrderId) {
+            orderIdInput.value = lastOrderId;
+            // Automatically submit the form to fetch order details
+            document.getElementById('trackOrderForm').requestSubmit();
+        }
+    });
+
+    /**
+     * Handles the form submission to fetch and display order status and details.
+     */
+    document.getElementById('trackOrderForm').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        
+        const orderId = document.getElementById('order-id-input').value;
+        const detailsCard = document.getElementById('order-details-card');
+        const errorDisplay = document.getElementById('error-display');
+        const statusDisplay = document.getElementById('status-display');
+
+        if (!orderId) return; // Exit if no ID is entered
+
+        // Reset UI elements before fetching new data
+        clearInterval(countdownInterval);
+        detailsCard.classList.add('d-none'); // Hide details card
+        errorDisplay.innerHTML = '';        // Clear previous errors
+        statusDisplay.innerHTML = `<div class="spinner-border text-primary spinner-border-sm" role="status"></div>`; // Show loading spinner
+        currentOrderData = null;            // Clear previous order data
+
+        try {
+            const response = await fetch(`/get_order_status/${orderId}`);
+            const data = await response.json();
+
+            if (data.success) {
+                currentOrderData = data; // Store data for receipt generation
+                
+                // Populate the Order Summary card
+                document.getElementById('customer-name-display').textContent = data.customer_name;
+                document.getElementById('total-bill-display').textContent = `₹${data.total_price.toFixed(2)}`;
+                const itemList = document.getElementById('item-list-display');
+                itemList.innerHTML = ''; // Clear previous items
+                data.items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    li.innerHTML = `${item.name} <span class="badge bg-primary rounded-pill">${item.quantity}</span>`;
+                    itemList.appendChild(li);
+                });
+                
+                detailsCard.classList.remove('d-none'); // Show the populated card
+
+                // Display status message or start countdown timer
+                if (data.status === 'Pending' && data.completion_time) {
+                    startCountdown(data.completion_time, statusDisplay);
+                } else if (data.status === 'Completed') {
+                    statusDisplay.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="text-success mb-0">✅ Your order is ready for pickup!</h5>
+                            <button id="downloadReceiptBtn" class="btn btn-sm btn-outline-success">Download Receipt</button>
+                        </div>
+                    `;
+                    // Add listener for the download button
+                    document.getElementById('downloadReceiptBtn').addEventListener('click', () => generateAndDownloadReceipt(orderId));
+                } else if (data.status === 'Cancelled') {
+                    statusDisplay.innerHTML = `<h5 class="text-danger">❌ This order has been cancelled.</h5>`;
+                } else {
+                    statusDisplay.innerHTML = `<h5 class="text-muted">Order status unavailable.</h5>`;
+                }
+
+            } else {
+                // Display error message from the server (e.g., "Order not found")
+                errorDisplay.innerHTML = `<div class="alert alert-warning" role="alert">${data.message}</div>`;
+            }
+
+        } catch (error) {
+            // Handle network errors or issues during processing
+            console.error("Error during fetch or processing:", error);
+            errorDisplay.innerHTML = `<div class="alert alert-danger" role="alert">An error occurred while fetching order status. Please try again.</div>`;
+            statusDisplay.innerHTML = ''; // Clear spinner on error
+        }
+    });
+    
+    /**
+     * Generates a plain text receipt and triggers a download.
+     * @param {number} orderId - The ID of the order for the receipt filename.
+     */
+    function generateAndDownloadReceipt(orderId) {
+        if (!currentOrderData) { 
+            alert("Order data could not be retrieved for the receipt."); 
+            return; 
+        }
+        // Build receipt content string
+        let receiptContent = `========================================\n`;
+        receiptContent += `      CANTEEN ORDER RECEIPT\n`;
+        receiptContent += `========================================\n\n`;
+        receiptContent += `Order ID: #${orderId}\n`;
+        receiptContent += `Customer: ${currentOrderData.customer_name}\n`;
+        receiptContent += `Date: ${new Date().toLocaleString()}\n\n`;
+        receiptContent += `----------------------------------------\nITEMS\n----------------------------------------\n`;
+        currentOrderData.items.forEach(item => {
+            receiptContent += `${item.name.padEnd(25)} x ${item.quantity}\n`;
+        });
+        receiptContent += `----------------------------------------\n\n`;
+        receiptContent += `TOTAL BILL: ₹${currentOrderData.total_price.toFixed(2)}\n\n`;
+        receiptContent += `Thank you for your order!\n`;
+        
+        // Create a Blob and trigger download
+        const blob = new Blob([receiptContent], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `receipt_order_${orderId}.txt`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href); // Clean up the object URL
+    }
+
+    /**
+     * Starts and updates the countdown timer displayed in the status area.
+     * @param {string} completionTimeISO - The estimated completion time in ISO format.
+     * @param {HTMLElement} displayElement - The HTML element to update with the countdown.
+     */
+    function startCountdown(completionTimeISO, displayElement) {
+        const completionTime = new Date(completionTimeISO);
+        // Clear any existing timer before starting a new one
+        clearInterval(countdownInterval); 
+        
+        countdownInterval = setInterval(() => {
+            const now = new Date();
+            const timeLeft = completionTime - now; // Time remaining in milliseconds
+
+            if (timeLeft <= 0) {
+                // If time is up, stop the timer and update status
+                clearInterval(countdownInterval);
+                displayElement.innerHTML = `<h5 class="text-info">Your order should be ready shortly!</h5>`;
+                return;
+            }
+
+            // Calculate remaining minutes and seconds
+            const minutes = Math.floor((timeLeft % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+            // Format time with leading zeros
+            const formattedMinutes = String(minutes).padStart(2, '0');
+            const formattedSeconds = String(seconds).padStart(2, '0');
+            
+            // Update the display element
+            displayElement.innerHTML = `<h5 class="text-info">Your order is being prepared!</h5><p class="mb-0">Time remaining: <strong>${formattedMinutes}:${formattedSeconds}</strong></p>`;
+        }, 1000); // Update every second
+    }
+</script>
+{% endblock %}

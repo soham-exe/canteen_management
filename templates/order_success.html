@@ -1,0 +1,125 @@
+{% extends "base_customer.html" %}
+
+{% block title %}Order Status{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center align-items-center" style="min-height: 70vh;">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            
+            <!-- Display different content based on whether the order was cancelled -->
+            {% if order.order_status == 'Cancelled' %}
+                <!-- Cancelled Order View -->
+                <div id="card-header" class="card-header bg-danger text-white text-center">
+                    <h2 id="card-title">❌ Order Cancelled</h2>
+                </div>
+                <div class="card-body p-4">
+                    <h5 class="card-title">Order #{{ order.order_id }} was successfully cancelled.</h5>
+                </div>
+            {% else %}
+                <!-- Successfully Placed / Pending Order View -->
+                <div id="card-header" class="card-header bg-success text-white text-center">
+                    <h2 id="card-title">✅ Order Placed Successfully!</h2>
+                </div>
+                <div class="card-body p-4">
+                    <h5 class="card-title">Thank you, {{ order.customer_name }}!</h5>
+                    <p class="lead">Your unique Order Number is: <strong>#{{ order.order_id }}</strong></p>
+                    <hr>
+                    
+                    <h4>Order Summary:</h4>
+                    <ul class="list-group mb-3">
+                        {% for item in order_items %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                {{ item.name }}
+                                <small class="text-muted">(Quantity: {{ item.quantity }})</small>
+                            </div>
+                            <span>₹{{ "%.2f"|format(item.price_per_item * item.quantity) }}</span>
+                        </li>
+                        {% endfor %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center active">
+                            <strong>Total Price</strong>
+                            <strong>₹{{ "%.2f"|format(order.total_price) }}</strong>
+                        </li>
+                    </ul>
+                    
+                    <!-- Buttons are only shown if the order wasn't cancelled -->
+                    <div class="text-center" id="action-buttons">
+                        <button id="cancel-order-btn" class="btn btn-danger mt-3" data-order-id="{{ order.order_id }}">
+                            Cancel Order <span id="cancel-timer">(10s)</span>
+                        </button>
+                    </div>
+                    <!-- Status message (e.g., confirmation of cancellation) -->
+                    <div id="final-status" class="text-center mt-3"></div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    /**
+     * Initializes the cancellation countdown and button listener 
+     * only if the cancel button exists on the page (i.e., order wasn't already cancelled).
+     */
+    const cancelButton = document.getElementById('cancel-order-btn');
+    if (cancelButton) {
+        document.addEventListener('DOMContentLoaded', () => {
+            const timerSpan = document.getElementById('cancel-timer');
+            let countdown = 10;
+            
+            // Start the 10-second countdown visually
+            const countdownInterval = setInterval(() => {
+                countdown--;
+                if (timerSpan) timerSpan.textContent = `(${countdown}s)`;
+
+                if (countdown <= 0) {
+                    clearInterval(countdownInterval);
+                    cancelButton.disabled = true;
+                    cancelButton.innerHTML = "Cancellation Window Expired";
+                    cancelButton.classList.replace('btn-danger', 'btn-secondary');
+                }
+            }, 1000);
+
+            // Add listener to handle the cancellation request
+            cancelButton.addEventListener('click', async function() {
+                const orderId = this.getAttribute('data-order-id');
+                this.disabled = true;
+                this.textContent = "Cancelling...";
+
+                try {
+                    const response = await fetch(`/cancel_order/${orderId}`, { method: 'POST' });
+                    const result = await response.json();
+                    clearInterval(countdownInterval); // Stop timer on response
+
+                    if (result.success) {
+                        // Update UI to reflect successful cancellation
+                        document.getElementById('card-header').classList.replace('bg-success', 'bg-danger');
+                        document.getElementById('card-title').textContent = '❌ Order Cancelled';
+                        document.getElementById('action-buttons').classList.add('d-none'); // Hide buttons
+                        document.getElementById('final-status').innerHTML = `<h4 class="text-danger">${result.message}</h4>`;
+                    } else {
+                        // Handle server-side rejection (e.g., time expired)
+                        alert(result.message);
+                        cancelButton.innerHTML = "Cancellation Window Expired";
+                        cancelButton.classList.replace('btn-danger', 'btn-secondary');
+                        // No need to re-enable button if window expired
+                    }
+                } catch (error) {
+                    console.error("Cancellation fetch error:", error);
+                    alert("An error occurred. Please try again.");
+                    // Re-enable button on network error to allow retry
+                    this.disabled = false; 
+                    if (timerSpan) { // Check if timerSpan still exists
+                         this.innerHTML = `Cancel Order <span id="cancel-timer">(${countdown}s)</span>`;
+                    } else {
+                         this.innerHTML = `Cancel Order`; // Fallback if span somehow missing
+                    }
+                }
+            });
+        });
+    }
+</script>
+{% endblock %}

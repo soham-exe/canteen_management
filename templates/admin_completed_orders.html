@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sales & History Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .table-hover tbody tr:hover {
+            background-color: #f8f9fa; 
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="#">Admin Panel</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">Live Orders</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_menu' %}active{% endif %}" href="{{ url_for('admin_menu') }}">Menu Management</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == 'admin_completed_orders' %}active{% endif %}" href="{{ url_for('admin_completed_orders') }}">Sales History</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h2>Sales and Order History</h2>
+
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card bg-success text-white">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Revenue</h5>
+                        <p class="card-text fs-2">₹{{ "%.2f"|format(total_sales) }}</p>
+                        <p class="card-text">Total {{ orders|length }} orders completed.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h3>Completed Orders List</h3>
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>Customer</th>
+                    <th>Price</th>
+                    <th>Status</th>
+                    <th>Completion Time</th>
+                    <th>Performance</th>
+                    <th>Details</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>#{{ order.order_id }}</td>
+                    <td>{{ order.customer_name }}</td>
+                    <td>₹{{ "%.2f"|format(order.total_price) }}</td>
+                    <td><span class="badge bg-success">ARCHIVED</span></td>
+                    <td>{{ order.actual_completion_date.strftime('%Y-%m-%d %H:%M') }}</td>
+                    <td>
+                        {% if order.was_late %}
+                            <span class="badge bg-danger">LATE</span>
+                        {% else %}
+                            <span class="badge bg-primary">ON TIME</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-info text-white view-items-btn" 
+                                data-order-id="{{ order.order_id }}">
+                            View Items
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="modal fade" id="orderDetailsModal" tabindex="-1" aria-labelledby="orderDetailsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="orderDetailsModalLabel">Order Details #<span id="modal-order-id"></span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Customer: <strong id="modal-customer-name"></strong></p>
+                    <hr>
+                    <h6>Items Prepared:</h6>
+                    <ul class="list-group" id="modal-items-list"></ul>
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total Order Value:</strong>
+                        <strong id="modal-total-price"></strong>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        /**
+         * Initializes the page by setting up event listeners for the 'View Items' buttons.
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            // Data array passed from Flask/Jinja to enable modal functionality
+            const completedOrdersData = [
+                {% for order in orders %}
+                {
+                    order_id: {{ order.order_id }},
+                    customer_name: "{{ order.customer_name }}",
+                    total_price: {{ "%.2f"|format(order.total_price) | float }},
+                } {% if not loop.last %},{% endif %}
+                {% endfor %}
+            ];
+            
+            setupViewItemsListeners(completedOrdersData);
+        });
+
+        /**
+         * Attaches click event listeners to all 'View Items' buttons.
+         * @param {Array} ordersData - The array of order objects.
+         */
+        function setupViewItemsListeners(ordersData) {
+            document.querySelectorAll('.view-items-btn').forEach(button => {
+                button.removeEventListener('click', handleViewItemsClick); 
+                button.addEventListener('click', handleViewItemsClick);
+            });
+        
+            function handleViewItemsClick(event) {
+                event.stopPropagation(); 
+                const button = event.currentTarget;
+                const orderId = parseInt(button.getAttribute('data-order-id'));
+                const orderData = ordersData.find(o => o.order_id === orderId);
+
+                if (orderData) {
+                    showOrderDetails(orderId, orderData);
+                }
+            }
+        }
+
+        /**
+         * Fetches item details and displays them in a Bootstrap modal.
+         * @param {number} orderId - The ID of the order to fetch details for.
+         * @param {object} orderData - The summary data for the order.
+         */
+        async function showOrderDetails(orderId, orderData) {
+            const modal = new bootstrap.Modal(document.getElementById('orderDetailsModal'));
+            const itemList = document.getElementById('modal-items-list');
+            
+            document.getElementById('modal-order-id').textContent = orderId;
+            document.getElementById('modal-customer-name').textContent = orderData.customer_name;
+            document.getElementById('modal-total-price').textContent = `₹${orderData.total_price.toFixed(2)}`;
+            itemList.innerHTML = '<li class="list-group-item text-center text-muted">Loading items...</li>';
+            
+            modal.show();
+
+            try {
+                const response = await fetch(`/admin/api/order_details/${orderId}`);
+                const data = await response.json();
+                itemList.innerHTML = '';
+
+                if (data.success && data.items.length > 0) {
+                    data.items.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                        li.innerHTML = `
+                            <span class="fs-5">${item.name}</span>
+                            <span class="badge bg-primary rounded-pill fs-6">${item.quantity}</span>
+                        `;
+                        itemList.appendChild(li);
+                    });
+                } else {
+                    itemList.innerHTML = '<li class="list-group-item text-muted">No item details available.</li>';
+                }
+            } catch (error) {
+                console.error('Error fetching details:', error);
+                itemList.innerHTML = '<li class="list-group-item text-danger">Failed to connect to server.</li>';
+            }
+        }
+    </script>
+</body>
+</html>
