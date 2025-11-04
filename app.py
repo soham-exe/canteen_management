@@ -102,7 +102,7 @@ def order_success(order_id):
 
         if not order:
             return "Order not found.", 404
-
+    
         cur.execute("""
             SELECT mi.name, od.quantity, od.price_per_item 
             FROM order_details od
