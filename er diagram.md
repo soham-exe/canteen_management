@@ -26,7 +26,7 @@
 |quantity|	INT|		|Units ordered|
 |price_per_item|	DECIMAL|	|	Price of 1 quantity at time of order|
 ### 4️⃣ COMPLETED_ORDERS_ARCHIVE
-Field Name	Type	Key	Description
+|Field Name	|Type	|Key	|Description|
 |----------|-------|--------|-------|
 |archived_order_id	|INT	|PK	|Archived Order ID|
 |original_order_id	|INT	|	|Original Order ID|
@@ -36,7 +36,7 @@ Field Name	Type	Key	Description
 |order_date	|DATETIME	|	|When order was placed|
 |completion_time	|DATETIME|		|When order was completed|
 ### 5️⃣ COMPLETED_ORDER_DETAILS_ARCHIVE
-Field Name	Type	Key	Description
+|Field Name	|Type	|Key	|Description|
 |----------|-------|--------|-------|
 |archived_detail_id	|INT|	PK	|Archived Detail ID|
 |original_detail_id	|INT|		|Original Detail ID|
@@ -45,7 +45,7 @@ Field Name	Type	Key	Description
 |quantity	|INT|		|Quantity ordered|
 |price_per_item	|DECIMAL|		|Price of item|
 ### 6️⃣ CANTEEN_STATUS
-Field Name	Type	Key	Description
+|Field Name	|Type	|Key	|Description|
 |----------|-------|--------|-------|
 |status_id|	INT|	PK|	ID|
 |is_open|	BOOL|		|Whether canteen is open|
