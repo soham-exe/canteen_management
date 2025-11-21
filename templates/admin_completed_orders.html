@@ -32,8 +32,12 @@
     </nav>
 
     <div class="container mt-4">
-        <h2>Sales and Order History</h2>
-
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h2>Sales and order history</h2>
+            <button id="reset-button" class="btn btn-danger btn-sm">
+                <i class="fas fa-trash"></i> End-of-Day Reset
+            </button>
+        </div>
         <div class="row mb-4">
             <div class="col-md-4">
                 <div class="card bg-success text-white">
@@ -129,6 +133,8 @@
             ];
             
             setupViewItemsListeners(completedOrdersData);
+            setupResetButtonListener(); // Added listener for the reset button
+
         });
 
         /**
@@ -152,7 +158,33 @@
                 }
             }
         }
-
+        /**
+         * Sets up the click listener for the 'End-of-Day Reset' button.
+         */
+        function setupResetButtonListener() {
+            document.getElementById('reset-button').addEventListener('click', function() {
+                if (!confirm("⚠️ WARNING: This will PERMANENTLY delete ALL order history and reset the order number count. Are you sure?")) {
+                    return;
+                }
+                fetch('/admin/reset_daily_data', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.querySelector('#orders-table tbody').innerHTML = ''; // Clear table visually
+                        showFlashMessage(data.message, 'success');
+                    } else {
+                        showFlashMessage(data.message, 'danger');
+                    }
+                })
+                .catch(error => {
+                    console.error('Reset Error:', error);
+                    showFlashMessage('Network error during reset.', 'danger');
+                });
+            });
+        }
         /**
          * Fetches item details and displays them in a Bootstrap modal.
          * @param {number} orderId - The ID of the order to fetch details for.

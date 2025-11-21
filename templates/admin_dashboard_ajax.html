@@ -42,9 +42,9 @@
         
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h2>Live Orders Queue 👨‍🍳</h2>
-            <button id="reset-button" class="btn btn-danger btn-sm">
+            <!-- <button id="reset-button" class="btn btn-danger btn-sm">\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
                 <i class="fas fa-trash"></i> End-of-Day Reset
-            </button>
+            </button> -->
         </div>
         
         <div id="flash-messages"></div>
@@ -261,7 +261,7 @@
 
         /**
          * Sets up the click listener for the 'End-of-Day Reset' button.
-         */
+         //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         function setupResetButtonListener() {
             document.getElementById('reset-button').addEventListener('click', function() {
                 if (!confirm("⚠️ WARNING: This will PERMANENTLY delete ALL order history and reset the order number count. Are you sure?")) {
@@ -286,7 +286,7 @@
                 });
             });
         }
-
+        */
         /**
          * Updates the countdown timers for pending orders every second.
          */
@@ -338,7 +338,7 @@
 
             setupMarkReadyListeners();
             setupRowClickListeners(initialOrdersData);
-            setupResetButtonListener(); // Added listener for the reset button
+        //    setupResetButtonListener(); // Added listener for the reset button//////////////////////////////////////////////////////////////////////
         });
     </script>
 </body>
