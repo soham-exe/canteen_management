@@ -7,7 +7,7 @@ app = Flask(__name__)
 # --- MySQL Configuration ---
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
-app.config['MYSQL_PASSWORD'] = 'soham' # Ensure this is your correct password
+app.config['MYSQL_PASSWORD'] = 'password' # Ensure this is your correct password
 app.config['MYSQL_DB'] = 'canteen_db'
 app.config['MYSQL_CURSORCLASS'] = 'DictCursor' # Returns results as dictionaries
 
