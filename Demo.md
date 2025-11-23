@@ -2,4 +2,4 @@
 
 Here is a demonstration of the project in action:
 
-[![Demo]("[Demo.png](https://github.com/soham-exe/canteen_management/blob/main/Demo.png)")](https://youtu.be/y4z4hZfYpB4)
+[![Project Demo](https://raw.githubusercontent.com/soham-exe/canteen_management/main/Demo.png)](https://youtu.be/y4z4hZfYpB4)
